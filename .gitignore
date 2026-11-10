@@ -1,0 +1,53 @@
+# Binaries and build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+project-exhibition-backend
+
+# Test and coverage artifacts
+*.out
+*.test
+profile.cov
+
+# Environment and secrets
+.env
+*.env
+*.key
+*.pem
+secrets/
+
+# AI Agent tooling, artifacts, and assistants (STRICTLY PROHIBITED)
+.agents/
+.agents
+.gemini/
+.gemini
+*.agent
+.cursor/
+.claude/
+.copilot/
+ai_prompts/
+ai_logs/
+*prompt*
+brain/
+*scratch*
+
+# Operating System and IDE files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Log files and temporary folders
+*.log
+tmp/
+vendor/
