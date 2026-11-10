@@ -1,165 +1,87 @@
-# Project Exhibition Backend: Implementasi AAA Framework & Kepatuhan UU No. 27 Tahun 2022
+# Project Exhibition Backend
 
-Repositori ini memuat implementasi lengkap backend API berbasis **Golang** dan **PostgreSQL** untuk sistem manajemen pameran proyek (*Project Exhibition*), yang dibangun guna memenuhi penugasan besar mata kuliah **Keamanan Data (CDK3CAB3)**, Program Studi Sarjana Sains Data, School of Computing, Telkom University.
+Backend API untuk Project Exhibition menggunakan Golang dan PostgreSQL. Dibuat untuk memenuhi Tugas Kelompok mata kuliah Keamanan Data (CDK3CAB3), S1 Sains Data, Telkom University.
 
----
+## Tim Pengembang (Kelompok 4)
+- **Muhamad Alexander**
+- **Muhammad Ammar Ridho** (103052400009)
+- **Muflih Rafif Ibrahim**
+- **Wijdanadam Rafifilmi Nadarosula**
 
-## 1. Identitas Kelompok
+## Fitur Utama
+1. **Authentication (authn.go)**: Password hashing menggunakan Argon2id dan sesi stateless dengan JWT (HS256, 24 jam).
+2. **Authorization (authz.go & exhibition.go)**: Role-Based Access Control (RBAC) untuk peran `student`, `judge`, dan `admin`. Dilengkapi pengecekan kepemilikan objek pada nilai proyek mahasiswa.
+3. **Accountability (middleware.go)**: Pencatatan jejak audit akses secara asinkron ke tabel `audit_logs` (non-blocking).
+4. **Kepatuhan UU PDP (compliance.go)**:
+   - `GET /api/v1/users/me/data` (Pasal 5 - Akses Profil)
+   - `PUT /api/v1/users/me/data` (Pasal 6 - Perbaikan Data)
+   - `GET /api/v1/users/me/audit-log` (Pasal 11 & 31 - Riwayat Audit)
+   - `GET /api/v1/users/me/export` (Pasal 13 - Portabilitas Data JSON)
+   - `DELETE /api/v1/users/me` (Pasal 8 & 43 - Penghapusan Akun & Data Pribadi)
 
-- **Kelompok**: Kelompok 8
-- **Kelas**: Sarjana Sains Data (DS-47-01)
-- **Dosen Pengampu**: Pratama Azmi Atmajaya
-- **Anggota Tim**:
-  1. **Muhamad Alexander**
-  2. **Muhammad Ammar Ridho** (103052400009)
-  3. **Muflih Rafif Ibrahim**
-  4. **Wijdanadam Rafifilmi Nadarosula**
+## Menjalankan Aplikasi
 
----
+### 1. Inisialisasi Database
+Jalankan PostgreSQL lokal, buat database, dan migrasi skema tabel:
+```bash
+createdb project_exhibition
+psql -U postgres -d project_exhibition -f schema.sql
+```
 
-## 2. Arsitektur Keamanan Data (AAA Framework) & UU PDP
-
-### A. Authentication (Otentikasi - `authn.go`)
-- **Password Hashing Modern (Argon2id)**:
-  - Menggunakan algoritma berbasis memori Argon2id untuk menangkal serangan brute-force berbasis GPU/ASIC.
-  - Parameter: Salt kriptografis unik 16-byte (`crypto/rand`), iterasi $t=3$, memori $m=64\text{ MB}$, paralelisme $p=2$, dan panjang kunci 32-byte.
-  - Verifikasi kata sandi dieksekusi secara *constant-time comparison* (`crypto/subtle`) guna mencegah *timing attacks*.
-- **Stateless Session (JSON Web Token / JWT)**:
-  - Klaim token memuat identitas `user_id`, `role`, `exp` (masa berlaku 24 jam), dan `iat`.
-  - Tanda tangan kriptografis divalidasi menggunakan HMAC-SHA256 (`HS256`).
-  - Penolakan otentikasi otomatis menghasilkan HTTP `401 Unauthorized` pada skenario: header kosong, format salah (bukan `Bearer <token>`), tanda tangan rusak/palsu, dan token kedaluwarsa.
-
-### B. Authorization (Otorisasi - `authz.go` & `exhibition.go`)
-- **Role-Based Access Control (RBAC)**:
-  - Sistem menegakkan hak akses pada 3 peran: `student`, `judge`, dan `admin`.
-- **Verifikasi Kepemilikan Objek (Object-Level Ownership Check)**:
-  - Pada endpoint `GET /api/v1/projects/{id}/grades`, mahasiswa (`student`) **hanya diizinkan** melihat nilai proyek miliknya sendiri. Akses terhadap nilai proyek mahasiswa lain ditolak dengan HTTP `403 Forbidden`.
-  - Mahasiswa **dilarang keras** memberikan nilai pada proyek siapa pun, termasuk proyek miliknya sendiri (`POST /api/v1/projects/{id}/grade` $\rightarrow$ `403 Forbidden`).
-  - Peran `judge` dan `admin` memiliki hak untuk melihat dan memberi nilai pada seluruh proyek.
-
-### C. Accountability (Akuntabilitas - `middleware.go`)
-- **Non-blocking Asynchronous Audit Logging**:
-  - Setiap request ke endpoint terlindungi dicatat ke tabel `audit_logs` (mencatat `user_id`, `endpoint`, `method`, `status_code`, `ip_address`, dan `timestamp`).
-  - Pencatatan log dieksekusi secara asinkron menggunakan goroutine latar belakang (`go func(...)`) sehingga latensi respon HTTP ke pengguna sama sekali tidak terhambat.
-
-### D. Kepatuhan UU No. 27 Tahun 2022 (UU PDP - `compliance.go`)
-- **`GetMyData` (`GET /api/v1/users/me/data`)**: Memenuhi **Pasal 5 UU PDP** (Hak transparansi identitas dan akses data pribadi). Kolom sensitif `password_hash` secara ketat difilter dan tidak disertakan.
-- **`UpdateMyData` (`PUT /api/v1/users/me/data`)**: Memenuhi **Pasal 6 UU PDP** (Hak melengkapi, memperbarui, dan memperbaiki ketidakakuratan data).
-- **`GetMyAuditLog` (`GET /api/v1/users/me/audit-log`)**: Memenuhi **Pasal 11 jo. Pasal 31 UU PDP** (Hak akses rekam jejak pemrosesan data & kewajiban Pengendali Data merekam seluruh kegiatan pemrosesan).
-- **`ExportMyData` (`GET /api/v1/users/me/export`)**: Memenuhi **Pasal 13 UU PDP** (Hak portabilitas data dalam format terstruktur dan lazim dibaca mesin / *machine-readable* JSON).
-- **`DeleteMyAccount` (`DELETE /api/v1/users/me`)**: Memenuhi **Pasal 8 jo. Pasal 43 UU PDP** (Hak pengakhiran pemrosesan dan pemusnahan data / *right to erasure*) via transaksi basis data atomik.
-
----
-
-## 3. Prasyarat & Panduan Instalasi
-
-### Prasyarat Lingkungan
-- Go versi 1.23 atau lebih tinggi
-- PostgreSQL versi 14 atau lebih tinggi
-
-### Langkah Setup Basis Data
-1. Buat database PostgreSQL:
-   ```bash
-   createdb project_exhibition
-   ```
-2. Jalankan skema migrasi tabel:
-   ```bash
-   psql -U postgres -d project_exhibition -f schema.sql
-   ```
-
-### Menjalankan Server Backend
-Set environment variable koneksi basis data (opsional jika menggunakan default lokal):
+### 2. Menjalankan Server
 ```bash
 export DATABASE_URL="postgres://postgres:postgres@localhost:5432/project_exhibition?sslmode=disable"
 export PORT="8080"
-```
-Jalankan aplikasi:
-```bash
 go run .
 ```
-Server akan aktif pada `http://localhost:8080`.
 
----
-
-## 4. Panduan Pengujian Endpoint API (cURL)
-
-### 1. Registrasi & Login (Public Endpoints)
+### 3. Menjalankan Unit Test
 ```bash
-# Register Akun Mahasiswa
+go test -v .
+```
+
+## Contoh Pengujian Endpoint (cURL)
+
+### Register & Login
+```bash
+# Register Student
 curl -X POST http://localhost:8080/api/v1/register \
   -H "Content-Type: application/json" \
-  -d '{"name": "Muhammad Ammar Ridho", "email": "ammar@telkom.ac.id", "password": "PasswordAman123!", "role": "student"}'
+  -d '{"name": "Ammar Ridho", "email": "ammar@telkom.ac.id", "password": "Password123!", "role": "student"}'
 
-# Login Akun Mahasiswa
+# Login
 curl -X POST http://localhost:8080/api/v1/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "ammar@telkom.ac.id", "password": "PasswordAman123!"}'
-# Ambil nilai "token" dari respon JSON untuk pengujian protected endpoint
+  -d '{"email": "ammar@telkom.ac.id", "password": "Password123!"}'
 ```
 
-### 2. Pengujian Autentikasi (Task 1)
+### Submit & Grade Proyek
 ```bash
-# Skenario 1: Permintaan tanpa header Authorization (Harapan: 401 Unauthorized)
-curl -i -X GET http://localhost:8080/api/v1/projects
-
-# Skenario 2: Format header salah (Harapan: 401 Unauthorized)
-curl -i -X GET http://localhost:8080/api/v1/projects \
-  -H "Authorization: TokenFormatSalah"
-
-# Skenario 3: Token tanda tangan tidak valid / tampered (Harapan: 401 Unauthorized)
-curl -i -X GET http://localhost:8080/api/v1/projects \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.signature"
-
-# Skenario 4: Token valid (Harapan: 200 OK)
-curl -i -X GET http://localhost:8080/api/v1/projects \
-  -H "Authorization: Bearer <TOKEN_VALID>"
-```
-
-### 3. Pengujian Otorisasi & Pameran Proyek (Task 1)
-```bash
-# Mahasiswa Mengajukan Proyek (Harapan: 201 Created)
+# Submit Proyek (Student)
 curl -X POST http://localhost:8080/api/v1/projects \
-  -H "Authorization: Bearer <STUDENT_TOKEN>" \
+  -H "Authorization: Bearer <TOKEN_STUDENT>" \
   -H "Content-Type: application/json" \
-  -d '{"title": "Sistem Keamanan Data Berbasis AAA", "description": "Implementasi otentikasi Argon2id dan JWT pada pameran proyek"}'
+  -d '{"title": "Exhibition Security System", "description": "Implementasi AAA Framework"}'
 
-# Mahasiswa Mencoba Melihat Nilai Proyek Mahasiswa Lain (Harapan: 403 Forbidden)
-curl -i -X GET http://localhost:8080/api/v1/projects/<OTHER_PROJECT_ID>/grades \
-  -H "Authorization: Bearer <STUDENT_TOKEN>"
+# Submit Nilai (Judge)
+curl -X POST http://localhost:8080/api/v1/projects/<PROJECT_ID>/grade \
+  -H "Authorization: Bearer <TOKEN_JUDGE>" \
+  -H "Content-Type: application/json" \
+  -d '{"score": 90.5, "feedback": "Implementasi sangat baik"}'
 
-# Mahasiswa Melihat Nilai Proyek Miliknya Sendiri (Harapan: 200 OK)
-curl -i -X GET http://localhost:8080/api/v1/projects/<MY_PROJECT_ID>/grades \
-  -H "Authorization: Bearer <STUDENT_TOKEN>"
+# Cek Nilai (Student hanya bisa lihat miliknya)
+curl -X GET http://localhost:8080/api/v1/projects/<PROJECT_ID>/grades \
+  -H "Authorization: Bearer <TOKEN_STUDENT>"
 ```
 
-### 4. Pengujian Kepatuhan UU PDP (Task 2)
+### Kepatuhan UU PDP
 ```bash
-# 1. Hak Akses Data Diri (Pasal 5)
-curl -X GET http://localhost:8080/api/v1/users/me/data \
-  -H "Authorization: Bearer <TOKEN_VALID>"
+# Akses Profil
+curl -X GET http://localhost:8080/api/v1/users/me/data -H "Authorization: Bearer <TOKEN>"
 
-# 2. Hak Perbaikan Data Diri (Pasal 6)
-curl -X PUT http://localhost:8080/api/v1/users/me/data \
-  -H "Authorization: Bearer <TOKEN_VALID>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Muhammad Ammar Ridho, S.Stat.", "email": "ammar.ridho@telkom.ac.id"}'
+# Export Data (JSON)
+curl -X GET http://localhost:8080/api/v1/users/me/export -H "Authorization: Bearer <TOKEN>"
 
-# 3. Hak Akses Audit Trail Pemrosesan (Pasal 11 jo. 31)
-curl -X GET http://localhost:8080/api/v1/users/me/audit-log \
-  -H "Authorization: Bearer <TOKEN_VALID>"
-
-# 4. Hak Portabilitas Data Pribadi (Pasal 13)
-curl -X GET http://localhost:8080/api/v1/users/me/export \
-  -H "Authorization: Bearer <TOKEN_VALID>"
-
-# 5. Hak Penghapusan Akun & Data (Pasal 8 & 43 - Right to Erasure)
-curl -X DELETE http://localhost:8080/api/v1/users/me \
-  -H "Authorization: Bearer <TOKEN_VALID>"
+# Hapus Akun
+curl -X DELETE http://localhost:8080/api/v1/users/me -H "Authorization: Bearer <TOKEN>"
 ```
-
----
-
-## 5. Lisensi & Integritas Akademik
-
-Karya ini disusun secara mandiri oleh Kelompok 8 dalam rangka penugasan akademik mata kuliah Keamanan Data (CDK3CAB3) Telkom University. Seluruh logika keamanan dan pemenuhan regulasi hukum dirancang untuk mematuhi integritas kode dan tata kelola privasi data nasional.
-

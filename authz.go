@@ -6,33 +6,30 @@ import (
 	"net/http"
 )
 
-// RequireRole middleware otorisasi RBAC (Role-Based Access Control).
-// Membatasi akses endpoint hanya untuk peran-peran tertentu (student, judge, admin).
 func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			roleVal := r.Context().Value(ContextKeyRole)
-			if roleVal == nil {
-				writeJSONError(w, http.StatusUnauthorized, "unauthorized: missing session role")
+			val := r.Context().Value(ContextRole)
+			if val == nil {
+				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
-			userRole, ok := roleVal.(string)
+			userRole, ok := val.(string)
 			if !ok {
-				writeJSONError(w, http.StatusUnauthorized, "unauthorized: invalid role context")
+				writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 
-			// Pengecekan apakah peran pengguna diizinkan
-			isAllowed := false
-			for _, allowed := range allowedRoles {
-				if userRole == allowed {
-					isAllowed = true
+			allowed := false
+			for _, r := range allowedRoles {
+				if userRole == r {
+					allowed = true
 					break
 				}
 			}
 
-			if !isAllowed {
+			if !allowed {
 				writeJSONError(w, http.StatusForbidden, "forbidden: insufficient permissions")
 				return
 			}
@@ -42,29 +39,26 @@ func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 	}
 }
 
-// GetUserIDFromContext mengambil user ID dari request context secara aman.
-func GetUserIDFromContext(ctx context.Context) (string, error) {
-	val := ctx.Value(ContextKeyUserID)
+func GetUserID(ctx context.Context) (string, error) {
+	val := ctx.Value(ContextUserID)
 	if val == nil {
-		return "", errors.New("missing user id in context")
+		return "", errors.New("missing user id")
 	}
 	id, ok := val.(string)
 	if !ok {
-		return "", errors.New("invalid user id type")
+		return "", errors.New("invalid user id")
 	}
 	return id, nil
 }
 
-// GetRoleFromContext mengambil peran pengguna dari request context.
-func GetRoleFromContext(ctx context.Context) (string, error) {
-	val := ctx.Value(ContextKeyRole)
+func GetRole(ctx context.Context) (string, error) {
+	val := ctx.Value(ContextRole)
 	if val == nil {
-		return "", errors.New("missing role in context")
+		return "", errors.New("missing role")
 	}
 	role, ok := val.(string)
 	if !ok {
-		return "", errors.New("invalid role type")
+		return "", errors.New("invalid role")
 	}
 	return role, nil
 }
-

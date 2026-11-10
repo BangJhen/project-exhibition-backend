@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-// responseWriterWrapper pembungkus ResponseWriter untuk merekam status code HTTP.
 type responseWriterWrapper struct {
 	http.ResponseWriter
 	statusCode int
@@ -19,7 +18,6 @@ func (rw *responseWriterWrapper) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// writeJSONError menulis pesan error terstandarisasi dalam format JSON.
 func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -28,12 +26,11 @@ func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
 	})
 }
 
-// RecoveryMiddleware menangani panic secara anggun agar server tetap stabil.
 func RecoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("[PANIC RECOVERED] %v", rec)
+				log.Printf("panic recovered: %v", rec)
 				writeJSONError(w, http.StatusInternalServerError, "internal server error")
 			}
 		}()
@@ -41,55 +38,46 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// AuditLoggerMiddleware merekam seluruh interaksi endpoint ke tabel audit_logs.
-// Bersifat asinkron dan non-blocking (via goroutine) demi performa latensi tinggi.
 func AuditLoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wrappedWriter := &responseWriterWrapper{
+		wrapper := &responseWriterWrapper{
 			ResponseWriter: w,
-			statusCode:     http.StatusOK, // default jika WriteHeader tidak dipanggil eksplisit
+			statusCode:     http.StatusOK,
 		}
 
-		next.ServeHTTP(wrappedWriter, r)
+		next.ServeHTTP(wrapper, r)
 
-		// Ekstraksi metadata request
 		endpoint := r.URL.Path
 		method := r.Method
-		statusCode := wrappedWriter.statusCode
+		statusCode := wrapper.statusCode
 		clientIP := getClientIP(r)
 
 		var userIDPtr *string
-		if val := r.Context().Value(ContextKeyUserID); val != nil {
+		if val := r.Context().Value(ContextUserID); val != nil {
 			if idStr, ok := val.(string); ok && idStr != "" {
 				userIDPtr = &idStr
 			}
 		}
 
-		// Eksekusi pencatatan asinkronus (non-blocking) ke database
+		// Asynchronous audit log insertion
 		go func(uid *string, ep, m string, sc int, ip string) {
 			if db == nil {
 				return
 			}
 			query := `INSERT INTO audit_logs (user_id, endpoint, method, status_code, ip_address, timestamp) 
 			          VALUES ($1, $2, $3, $4, $5, NOW())`
-			_, err := db.Exec(query, uid, ep, m, sc, ip)
-			if err != nil {
-				log.Printf("[AUDIT ERROR] failed to write audit log: %v", err)
-			}
+			_, _ = db.Exec(query, uid, ep, m, sc, ip)
 		}(userIDPtr, endpoint, method, statusCode, clientIP)
 	})
 }
 
-// getClientIP mengambil IP asli klien termasuk jika berada di balik reverse proxy.
 func getClientIP(r *http.Request) string {
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		parts := strings.Split(forwarded, ",")
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		parts := strings.Split(fwd, ",")
 		return strings.TrimSpace(parts[0])
 	}
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		return strings.TrimSpace(realIP)
+	if rip := r.Header.Get("X-Real-IP"); rip != "" {
+		return strings.TrimSpace(rip)
 	}
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -97,4 +85,3 @@ func getClientIP(r *http.Request) string {
 	}
 	return ip
 }
-
