@@ -67,3 +67,4 @@ func GetRoleFromContext(ctx context.Context) (string, error) {
 	}
 	return role, nil
 }
+

@@ -162,3 +162,4 @@ curl -X DELETE http://localhost:8080/api/v1/users/me \
 ## 5. Lisensi & Integritas Akademik
 
 Karya ini disusun secara mandiri oleh Kelompok 8 dalam rangka penugasan akademik mata kuliah Keamanan Data (CDK3CAB3) Telkom University. Seluruh logika keamanan dan pemenuhan regulasi hukum dirancang untuk mematuhi integritas kode dan tata kelola privasi data nasional.
+

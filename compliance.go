@@ -256,3 +256,4 @@ func DeleteMyAccount(w http.ResponseWriter, r *http.Request) {
 		"message": "account and associated personal data permanently deleted",
 	})
 }
+
